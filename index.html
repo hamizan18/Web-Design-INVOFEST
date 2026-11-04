@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Optimasi rute dan jadwal pengangkutan sampah berbasis algoritma TSP dan re-routing dinamis untuk Kota Lhokseumawe.">
+  <meta name="theme-color" content="#0b1220">
+  <title>Smart Waste Route Optimizer · Lhokseumawe</title>
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Lewati ke konten utama</a>
+
+  <header class="app-header">
+    <div class="container header-inner">
+      <div class="brand">
+        <div class="brand-logo" aria-hidden="true">🚛</div>
+        <div>
+          <h1>Smart Waste Route Optimizer</h1>
+          <p>Rute &amp; jadwal angkut sampah cerdas · Kota Lhokseumawe</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="tabs" role="tablist" aria-label="Pilih tampilan">
+          <button id="tabAdmin" class="tab" role="tab" aria-selected="true" aria-controls="adminView" type="button">👑 Dashboard Admin</button>
+          <button id="tabDriver" class="tab" role="tab" aria-selected="false" aria-controls="driverView" type="button">📱 Portal Driver</button>
+        </div>
+        <button id="btnReset" class="btn btn-outline-red btn-sm" type="button">🔄 Reset Simulasi</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="container main">
+
+    <!-- ============ TAMPILAN ADMIN ============ -->
+    <div id="adminView" role="tabpanel" aria-labelledby="tabAdmin" class="admin-grid">
+
+      <section class="intro" aria-label="Tentang aplikasi">
+        <p>
+          Aplikasi ini membantu Dinas Lingkungan Hidup menyusun urutan pengangkutan sampah dari titik TPS menuju TPA
+          dengan jarak tempuh terpendek, memantau muatan armada, dan menyusun ulang rute secara otomatis ketika armada penuh.
+        </p>
+        <ul class="sdg-list" aria-label="Tujuan pembangunan berkelanjutan terkait">
+          <li class="sdg sdg-9">SDG 9 · Industri, Inovasi &amp; Infrastruktur</li>
+          <li class="sdg sdg-11">SDG 11 · Kota &amp; Permukiman Berkelanjutan</li>
+        </ul>
+      </section>
+
+      <div class="panel-left">
+        <section class="card" aria-labelledby="h-param">
+          <h2 id="h-param" class="card-title"><span aria-hidden="true">⚙️</span> Parameter perjalanan</h2>
+          <div class="field">
+            <label for="depotSelect">Depot / TPA (titik awal &amp; akhir)</label>
+            <select id="depotSelect"></select>
+          </div>
+          <div class="field">
+            <label for="vehicleSelect">Armada pengangkut</label>
+            <select id="vehicleSelect"></select>
+          </div>
+        </section>
+
+        <section class="card card-grow" aria-labelledby="h-tps">
+          <div class="row-between">
+            <div>
+              <h2 id="h-tps" class="card-title"><span aria-hidden="true">🗑️</span> Pilih TPS yang dilayani</h2>
+              <p class="muted small"><span id="selectedCount">0</span> TPS dipilih · total <b id="totalSelectedVolume" class="text-amber">0 kg</b></p>
+            </div>
+            <div class="link-group">
+              <button id="btnSelectAll" class="link-btn text-green" type="button">Semua</button>
+              <span aria-hidden="true">|</span>
+              <button id="btnDeselectAll" class="link-btn" type="button">Batal</button>
+            </div>
+          </div>
+
+          <div id="tpsChecklist" class="tps-list" role="group" aria-label="Daftar TPS"></div>
+
+          <button id="btnGenerateRoute" class="btn btn-primary btn-block" type="button">⚡ Buat Rute Optimal</button>
+        </section>
+
+        <section class="card" aria-labelledby="h-itin">
+          <h2 id="h-itin" class="card-title"><span aria-hidden="true">📋</span> Urutan kunjungan</h2>
+          <div id="routeTimeline" class="timeline-box" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <div class="panel-right">
+        <section class="kpi-grid" aria-label="Ringkasan rute">
+          <div class="kpi">
+            <div class="kpi-label">Total jarak tempuh</div>
+            <div id="kpiDistance" class="kpi-value">- km</div>
+            <div id="kpiDistanceNote" class="kpi-note text-muted">Menunggu rute dibuat</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Estimasi durasi</div>
+            <div id="kpiDuration" class="kpi-value">-</div>
+            <div class="kpi-note text-muted">Kecepatan rata-rata dalam kota</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Penghematan algoritma 2-Opt</div>
+            <div id="kpiEfficiency" class="kpi-value text-teal">0%</div>
+            <div class="kpi-note text-teal">Pemangkasan jalur bersilangan</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Total muatan rencana</div>
+            <div id="kpiTotalWaste" class="kpi-value text-amber">- kg</div>
+            <div id="kpiWasteNote" class="kpi-note text-amber"></div>
+          </div>
+        </section>
+
+        <section class="card map-card" aria-label="Peta rute">
+          <ul class="legend">
+            <li><span class="dot dot-blue"></span> Depot / TPA</li>
+            <li><span class="dot dot-cyan"></span> Dalam rute (#urutan)</li>
+            <li><span class="dot dot-green"></span> TPS selesai (✓)</li>
+            <li><span class="dot dot-amber"></span> TPS menunggu (kg)</li>
+          </ul>
+          <div id="map" role="application" aria-label="Peta interaktif rute pengangkutan"></div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ============ TAMPILAN DRIVER ============ -->
+    <div id="driverView" role="tabpanel" aria-labelledby="tabDriver" hidden>
+      <div id="driverContainer" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="container">
+      <p><b>Smart Ecosystems: Digital Solutions for a Sustainable Future</b> · Subtema Smart City &amp; Urban Innovation (SDG 9 &amp; 11)</p>
+      <p>Algoritma: Nearest Neighbor + 2-Opt · Jarak jalan: OSRM · Peta: OpenStreetMap &amp; CARTO · Pustaka peta: Leaflet</p>
+    </div>
+  </footer>
+
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/geo.js"></script>
+  <script src="js/tsp.js"></script>
+  <script src="js/route-engine.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/driver.js"></script>
+</body>
+</html>
