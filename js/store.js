@@ -1,21 +1,26 @@
 /**
  * PENYIMPANAN DATA DI BROWSER
- * Menyimpan kondisi simulasi (status TPS, muatan armada, rute, riwayat)
- * pada localStorage agar tidak hilang saat halaman dimuat ulang.
- * Jika localStorage tidak tersedia, aplikasi tetap berjalan di memori.
+ * Menyimpan kondisi simulasi (status TPS, armada & jadwal shift, rute per truk,
+ * riwayat muatan, pengaturan waktu) pada localStorage agar tidak hilang saat
+ * halaman dimuat ulang. Jika localStorage tidak tersedia, aplikasi tetap
+ * berjalan di memori.
  */
 (function () {
-  const KEY = 'sw-lhokseumawe-sesi-v1';
+  const KEY = 'sw-lhokseumawe-sesi-v2';
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
   function fresh() {
     return {
       vehicles: clone(SW.DATA.vehicles),
       tps: clone(SW.DATA.collection_points),
-      route: null,
-      routePoints: [],
-      logs: []
+      settings: clone(SW.DATA.settings),
+      routes: {} // { [vehicleId]: { route, points, logs } }
     };
+  }
+
+  function isValid(s) {
+    return s && Array.isArray(s.tps) && Array.isArray(s.vehicles) && s.routes && typeof s.routes === 'object' &&
+      s.settings && s.vehicles.length > 0 && s.vehicles.every((v) => v && v.shift && v.shift.start && v.shift.end);
   }
 
   function load() {
@@ -23,7 +28,7 @@
       const raw = window.localStorage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        if (s && Array.isArray(s.tps) && Array.isArray(s.vehicles)) return s;
+        if (isValid(s)) return s;
       }
     } catch (e) { /* abaikan, pakai data awal */ }
     return fresh();
@@ -35,10 +40,14 @@
     try { window.localStorage.setItem(KEY, JSON.stringify(session)); } catch (e) { /* abaikan */ }
   }
 
+  const slot = (vehicleId) => session.routes[vehicleId] || null;
+
   SW.store = {
+    /* ----- Depot ----- */
     getDepots: () => SW.DATA.depots,
     getDepotById: (id) => SW.DATA.depots.find((d) => d.id === id) || null,
 
+    /* ----- Armada & shift ----- */
     getVehicles: () => session.vehicles,
     getVehicleById: (id) => session.vehicles.find((v) => v.id === id) || null,
     updateVehicle(id, updates) {
@@ -47,7 +56,37 @@
       save();
       return v;
     },
+    /** Simpan konfigurasi dari form admin (kode, plat, kapasitas, aktif, shift) */
+    updateVehicleConfig(id, cfg) {
+      const v = this.getVehicleById(id);
+      if (!v) return null;
+      v.vehicle_code = cfg.vehicle_code;
+      v.plate_number = cfg.plate_number;
+      v.capacity = cfg.capacity;
+      v.active = cfg.active;
+      v.shift = { name: cfg.shift.name, start: cfg.shift.start, end: cfg.shift.end };
+      save();
+      return v;
+    },
+    /** Kembalikan kode, plat, kapasitas, dan jadwal ke default; muatan & status berjalan dipertahankan */
+    resetSchedule() {
+      session.vehicles = SW.DATA.vehicles.map((def) => {
+        const cur = session.vehicles.find((v) => v.id === def.id);
+        return Object.assign(clone(def), cur ? { current_capacity: cur.current_capacity, status: cur.status } : {});
+      });
+      session.settings = clone(SW.DATA.settings);
+      save();
+    },
 
+    /* ----- Pengaturan waktu ----- */
+    getSettings: () => session.settings,
+    updateSettings(updates) {
+      Object.assign(session.settings, updates);
+      save();
+      return session.settings;
+    },
+
+    /* ----- TPS ----- */
     getTps: () => session.tps,
     getTpsById: (id) => session.tps.find((t) => t.id === id) || null,
     updateTps(id, updates) {
@@ -57,39 +96,64 @@
       return t;
     },
 
-    createRoute(routeData, points) {
-      const id = 'rute-' + Date.now();
-      session.route = Object.assign({}, routeData, { id, created_at: new Date().toISOString() });
-      session.routePoints = points.map((p, i) => Object.assign({}, p, { id: `${id}-p${i + 1}`, route_id: id }));
-      session.logs = [];
+    /* ----- Rute (satu per truk) ----- */
+    createRoute(vehicleId, routeData, points) {
+      const id = `rute-${vehicleId}-${Date.now()}`;
+      const route = Object.assign({}, routeData, { id, vehicle_id: vehicleId, created_at: new Date().toISOString() });
+      session.routes[vehicleId] = {
+        route,
+        points: points.map((p, i) => Object.assign({}, p, { id: `${id}-p${i + 1}`, route_id: id })),
+        logs: []
+      };
       save();
-      return { route: session.route, points: session.routePoints };
+      return { route, points: session.routes[vehicleId].points };
     },
-    getRoute() {
-      return session.route ? { route: session.route, points: session.routePoints.slice().sort((a, b) => a.sequence - b.sequence) } : null;
+    getRoute(vehicleId) {
+      const s = slot(vehicleId);
+      return s ? { route: s.route, points: s.points.slice().sort((a, b) => a.sequence - b.sequence) } : null;
     },
-    updateRoute(updates) {
-      if (session.route) Object.assign(session.route, updates);
+    updateRoute(vehicleId, updates) {
+      const s = slot(vehicleId);
+      if (s) Object.assign(s.route, updates);
       save();
-      return session.route;
+      return s ? s.route : null;
     },
-    updateRoutePoint(id, updates) {
-      const p = session.routePoints.find((x) => x.id === id);
+    updateRoutePoint(vehicleId, pointId, updates) {
+      const s = slot(vehicleId);
+      const p = s ? s.points.find((x) => x.id === pointId) : null;
       if (p) Object.assign(p, updates);
       save();
       return p;
     },
 
-    addLog(log) {
-      const entry = Object.assign({}, log, { id: 'log-' + Date.now() + '-' + session.logs.length, timestamp: new Date().toISOString() });
-      session.logs.push(entry);
+    /** { [tpsId]: vehicleId } untuk TPS yang masih menunggu pada rute aktif suatu truk */
+    getAssignments() {
+      const map = {};
+      Object.keys(session.routes).forEach((vid) => {
+        const s = session.routes[vid];
+        if (!s || s.route.status === 'completed') return;
+        s.points.forEach((p) => { if (p.status === 'pending') map[p.collection_point_id] = vid; });
+      });
+      return map;
+    },
+
+    /* ----- Riwayat muatan ----- */
+    addLog(vehicleId, log) {
+      const s = slot(vehicleId);
+      if (!s) return null;
+      const entry = Object.assign({}, log, { id: 'log-' + Date.now() + '-' + s.logs.length, timestamp: new Date().toISOString() });
+      s.logs.push(entry);
       save();
       return entry;
     },
-    getLogs: () => session.logs,
+    getLogs: (vehicleId) => (slot(vehicleId) ? slot(vehicleId).logs : []),
 
+    /** Reset simulasi: rute, muatan, status TPS. Jadwal shift & pengaturan waktu TIDAK dihapus. */
     reset() {
-      session = fresh();
+      const f = fresh();
+      session.tps = f.tps;
+      session.routes = {};
+      session.vehicles.forEach((v) => { v.current_capacity = 0; v.status = 'available'; });
       save();
     }
   };

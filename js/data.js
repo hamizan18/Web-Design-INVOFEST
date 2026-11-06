@@ -20,18 +20,18 @@ SW.DATA = {
     }
   ],
 
+  // Armada beserta jadwal shift-nya. Semua nilai di sini hanya DEFAULT:
+  // admin dapat mengubahnya lewat tab "Jadwal Shift" tanpa menyentuh kode.
   // Kapasitas dibuat kecil (100 kg) agar skenario bongkar-muat dan
   // re-routing dinamis dapat didemonstrasikan dengan 15 TPS contoh.
   vehicles: [
-    {
-      id: 'veh-01',
-      vehicle_code: 'ARMADA-01',
-      plate_number: 'BL 1234 XX',
-      capacity: 100,
-      current_capacity: 0,
-      status: 'available'
-    }
+    { id: 'veh-a', vehicle_code: 'Truk A', short: 'A', plate_number: 'BL 1111 AA', capacity: 100, current_capacity: 0, status: 'available', active: true, color: '#10b981', shift: { name: 'Pagi',  start: '06:00', end: '11:00' } },
+    { id: 'veh-b', vehicle_code: 'Truk B', short: 'B', plate_number: 'BL 2222 BB', capacity: 100, current_capacity: 0, status: 'available', active: true, color: '#3b82f6', shift: { name: 'Siang', start: '11:00', end: '15:00' } },
+    { id: 'veh-c', vehicle_code: 'Truk C', short: 'C', plate_number: 'BL 3333 CC', capacity: 100, current_capacity: 0, status: 'available', active: true, color: '#f59e0b', shift: { name: 'Sore',  start: '15:00', end: '19:00' } }
   ],
+
+  // Pengaturan waktu default (menit). Dapat diubah admin di tab "Jadwal Shift".
+  settings: { serviceMinutes: 10, unloadMinutes: 15, useSim: false, simTime: '07:00' },
 
   collection_points: [
     { id: 'tps-01', name: 'TPS Batuphat Barat',      latitude: 5.216760,              longitude: 97.055356,             estimated_volume: 30, status: 'planned',   active: true },

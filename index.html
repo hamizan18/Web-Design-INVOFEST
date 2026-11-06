@@ -24,8 +24,9 @@
 
       <div class="header-actions">
         <div class="tabs" role="tablist" aria-label="Pilih tampilan">
-          <button id="tabAdmin" class="tab" role="tab" aria-selected="true" aria-controls="adminView" type="button">👑 Dashboard Admin</button>
-          <button id="tabDriver" class="tab" role="tab" aria-selected="false" aria-controls="driverView" type="button">📱 Portal Driver</button>
+          <button id="tabAdmin" class="tab" role="tab" aria-selected="true" aria-controls="adminView" type="button">👑 <span class="tab-text">Dashboard</span> Admin</button>
+          <button id="tabSchedule" class="tab" role="tab" aria-selected="false" aria-controls="scheduleView" type="button">🗓️ <span class="tab-text">Jadwal</span> Shift</button>
+          <button id="tabDriver" class="tab" role="tab" aria-selected="false" aria-controls="driverView" type="button">📱 <span class="tab-text">Portal</span> Driver</button>
         </div>
         <button id="btnReset" class="btn btn-outline-red btn-sm" type="button">🔄 Reset Simulasi</button>
       </div>
@@ -40,7 +41,7 @@
       <section class="intro" aria-label="Tentang aplikasi">
         <p>
           Aplikasi ini membantu Dinas Lingkungan Hidup menyusun urutan pengangkutan sampah dari titik TPS menuju TPA
-          dengan jarak tempuh terpendek, memantau muatan armada, dan menyusun ulang rute secara otomatis ketika armada penuh.
+          dengan jarak tempuh terpendek, membagi tugas ke beberapa truk sesuai jadwal shift, memantau muatan, dan menyusun ulang rute secara otomatis ketika armada penuh.
         </p>
         <ul class="sdg-list" aria-label="Tujuan pembangunan berkelanjutan terkait">
           <li class="sdg sdg-9">SDG 9 · Industri, Inovasi &amp; Infrastruktur</li>
@@ -56,9 +57,10 @@
             <select id="depotSelect"></select>
           </div>
           <div class="field">
-            <label for="vehicleSelect">Armada pengangkut</label>
+            <label for="vehicleSelect">Truk &amp; shift</label>
             <select id="vehicleSelect"></select>
           </div>
+          <div id="shiftInfo" class="shift-info" aria-live="polite"></div>
         </section>
 
         <section class="card card-grow" aria-labelledby="h-tps">
@@ -76,7 +78,8 @@
 
           <div id="tpsChecklist" class="tps-list" role="group" aria-label="Daftar TPS"></div>
 
-          <button id="btnGenerateRoute" class="btn btn-primary btn-block" type="button">⚡ Buat Rute Optimal</button>
+          <button id="btnGenerateRoute" class="btn btn-primary btn-block" type="button">⚡ Buat Rute Optimal untuk Truk Ini</button>
+          <button id="btnAutoAssign" class="btn btn-ghost btn-block" type="button">🧭 Bagi Otomatis ke Semua Truk</button>
         </section>
 
         <section class="card" aria-labelledby="h-itin">
@@ -93,9 +96,9 @@
             <div id="kpiDistanceNote" class="kpi-note text-muted">Menunggu rute dibuat</div>
           </div>
           <div class="kpi">
-            <div class="kpi-label">Estimasi durasi</div>
+            <div class="kpi-label">Estimasi waktu kerja</div>
             <div id="kpiDuration" class="kpi-value">-</div>
-            <div class="kpi-note text-muted">Kecepatan rata-rata dalam kota</div>
+            <div id="kpiDurationNote" class="kpi-note text-muted">Termasuk waktu layanan &amp; bongkar</div>
           </div>
           <div class="kpi">
             <div class="kpi-label">Penghematan algoritma 2-Opt</div>
@@ -115,9 +118,54 @@
             <li><span class="dot dot-cyan"></span> Dalam rute (#urutan)</li>
             <li><span class="dot dot-green"></span> TPS selesai (✓)</li>
             <li><span class="dot dot-amber"></span> TPS menunggu (kg)</li>
+            <li><span class="dot dot-purple"></span> Ditugaskan ke truk lain</li>
           </ul>
-          <div id="map" role="application" aria-label="Peta interaktif rute pengangkutan"></div>
+          <div class="map-wrap">
+            <div id="map" role="application" aria-label="Peta interaktif rute pengangkutan"></div>
+            <div id="mapNotice" class="map-notice" role="status" hidden></div>
+          </div>
         </section>
+      </div>
+    </div>
+
+
+    <!-- ============ TAMPILAN JADWAL SHIFT ============ -->
+    <div id="scheduleView" role="tabpanel" aria-labelledby="tabSchedule" hidden>
+      <div class="schedule-grid">
+        <section class="card" aria-labelledby="h-gantt">
+          <h2 id="h-gantt" class="card-title"><span aria-hidden="true">🗓️</span> Jadwal harian armada</h2>
+          <p class="muted small gantt-help">Garis vertikal menunjukkan jam yang dipakai aplikasi saat ini. Bagan ikut berubah saat jam di formulir di bawah diedit.</p>
+          <div id="ganttBox"></div>
+          <p id="overlapNotice" class="note note-warn" hidden></p>
+        </section>
+
+        <form id="scheduleForm" class="schedule-form" novalidate>
+          <section class="card" aria-labelledby="h-fleet">
+            <h2 id="h-fleet" class="card-title"><span aria-hidden="true">🚛</span> Pengaturan truk &amp; shift</h2>
+            <div id="fleetCards" class="fleet-cards"></div>
+            <datalist id="shiftNames"><option value="Pagi"></option><option value="Siang"></option><option value="Sore"></option><option value="Malam"></option></datalist>
+          </section>
+
+          <section class="card" aria-labelledby="h-time">
+            <h2 id="h-time" class="card-title"><span aria-hidden="true">⏱️</span> Pengaturan waktu</h2>
+            <div class="form-grid">
+              <div class="field"><label for="setService">Lama layanan per TPS (menit)</label>
+                <input id="setService" type="number" min="1" max="120" step="1"></div>
+              <div class="field"><label for="setUnload">Lama bongkar di depot (menit)</label>
+                <input id="setUnload" type="number" min="0" max="180" step="1"></div>
+            </div>
+            <div class="sim-row">
+              <label class="check-row"><input id="setUseSim" type="checkbox"> Pakai jam simulasi (untuk demo)</label>
+              <input id="setSimTime" type="time" aria-label="Jam simulasi">
+            </div>
+            <p id="nowText" class="muted small"></p>
+          </section>
+
+          <div class="form-actions">
+            <button id="btnSaveSchedule" class="btn btn-primary" type="submit">💾 Simpan Jadwal</button>
+            <button id="btnResetSchedule" class="btn btn-ghost" type="button">↩️ Kembalikan Default</button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -139,12 +187,14 @@
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="js/data.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/time.js"></script>
   <script src="js/store.js"></script>
   <script src="js/geo.js"></script>
   <script src="js/tsp.js"></script>
   <script src="js/route-engine.js"></script>
   <script src="js/map.js"></script>
   <script src="js/admin.js"></script>
+  <script src="js/schedule.js"></script>
   <script src="js/driver.js"></script>
 </body>
 </html>
