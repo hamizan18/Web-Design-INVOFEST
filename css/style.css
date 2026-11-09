@@ -76,9 +76,9 @@ button { cursor: pointer; }
 }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .brand-logo {
-  flex: none; width: 42px; height: 42px; border-radius: 12px; font-size: 22px;
-  display: grid; place-items: center;
-  background: linear-gradient(135deg, #059669, #2dd4bf);
+  flex: none; width: 48px; height: 48px; border-radius: 12px;
+  object-fit: contain;
+  background: transparent;
   box-shadow: 0 6px 18px rgba(16, 185, 129, .25);
 }
 .brand h1 { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
