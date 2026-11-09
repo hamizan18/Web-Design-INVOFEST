@@ -14,8 +14,8 @@ SW.DATA = {
     {
       id: 'depot-01',
       name: 'TPA Alue Lim',
-      latitude: 5.13,
-      longitude: 97.19,
+      latitude: 5.129304744044237,
+      longitude:  97.1216231711638,
       address: 'Gampong Alue Lim, Kec. Blang Mangat, Kota Lhokseumawe'
     }
   ],
@@ -39,7 +39,7 @@ SW.DATA = {
     { id: 'tps-03', name: 'TPS Meuria Paloh',        latitude: 5.209600,              longitude: 97.102044,             estimated_volume: 30, status: 'planned',   active: true },
     { id: 'tps-04', name: 'TPS Padang Sakti',        latitude: 5.202750,              longitude: 97.125462,             estimated_volume: 35, status: 'planned',   active: true },
     { id: 'tps-05', name: 'TPS Hagu Barat Laut',     latitude: 5.194756409173344,     longitude: 97.13370346319695,     estimated_volume: 30, status: 'planned',   active: true },
-    { id: 'tps-06', name: 'TPS Pusong Lama',         latitude: 5.181422212490169,     longitude: 97.15439296175592,     estimated_volume: 20, status: 'planned',   active: true },
+    { id: 'tps-06', name: 'TPS Pusong Lama',         latitude: 5.170637,              longitude: 97.149634,            estimated_volume: 20, status: 'planned',   active: true },
     { id: 'tps-07', name: 'TPS Hagu Teungoh',        latitude: 5.190920,              longitude: 97.144867,             estimated_volume: 35, status: 'planned',   active: true },
     { id: 'tps-08', name: 'TPS Kuta Blang',          latitude: 5.179844,              longitude: 97.144399,             estimated_volume: 25, status: 'planned',   active: true },
     { id: 'tps-09', name: 'TPS Pusong Baru',         latitude: 5.180407,              longitude: 97.150942,             estimated_volume: 25, status: 'planned',   active: true },
