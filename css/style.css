@@ -69,20 +69,35 @@ button { cursor: pointer; }
   background: rgba(11, 18, 32, .92);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
+  /* subtle green accent line at bottom */
+  box-shadow: 0 1px 0 0 rgba(52, 211, 153, .15), 0 4px 24px rgba(0,0,0,.35);
 }
 .header-inner {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 12px; padding-top: 12px; padding-bottom: 12px;
 }
-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.brand-logo {
-  flex: none; width: 48px; height: 48px; border-radius: 12px;
-  object-fit: contain;
-  background: transparent;
-  box-shadow: 0 6px 18px rgba(16, 185, 129, .25);
+.brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.brand-logo-wrap {
+  flex: none;
+  width: 52px; height: 52px;
+  border-radius: 14px;
+  display: grid; place-items: center;
+  background: linear-gradient(145deg, rgba(5, 150, 105, .18), rgba(16, 185, 129, .08));
+  border: 1px solid rgba(52, 211, 153, .22);
+  box-shadow: 0 4px 16px rgba(5, 150, 105, .22), 0 0 0 1px rgba(52, 211, 153, .08) inset;
+  padding: 4px;
+  backdrop-filter: blur(4px);
 }
+.brand-logo {
+  width: 44px; height: 44px;
+  object-fit: contain;
+  display: block;
+  /* mix-blend-mode: luminosity makes the white halo blend on dark bg */
+  filter: drop-shadow(0 2px 6px rgba(5, 150, 105, .35));
+}
+.brand-text { min-width: 0; }
 .brand h1 { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
-.brand p { font-size: 12px; color: var(--muted); }
+.brand p { font-size: 12px; color: var(--muted); margin-top: 1px; }
 
 .header-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tabs { display: flex; padding: 4px; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; }
@@ -347,6 +362,8 @@ select:focus { border-color: var(--green); }
   .header-inner { padding-top: 10px; padding-bottom: 10px; }
   .brand h1 { font-size: 15px; }
   .brand p { display: none; }
+  .brand-logo-wrap { width: 42px; height: 42px; border-radius: 11px; padding: 3px; }
+  .brand-logo { width: 36px; height: 36px; }
   .header-actions { width: 100%; justify-content: space-between; }
   .tabs { flex: 1; }
   .tab { flex: 1; padding: 8px 6px; font-size: 12px; }
