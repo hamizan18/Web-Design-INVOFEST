@@ -17,7 +17,7 @@ Cukup **buka `index.html` di browser** (klik dua kali). Tidak ada instalasi, ser
 
 - **Jadwal Shift:** admin mengatur tiap truk (nama, plat, kapasitas, aktif/nonaktif) dan jam shift (mis. Truk A Pagi, Truk B Siang, Truk C Sore) pada bagan jadwal harian, plus lama layanan per TPS, lama bongkar, dan jam simulasi untuk demo.
 - **Dashboard Admin:** pilih truk dan TPS → buat rute optimal per truk (atau **bagi otomatis ke semua truk**) → lihat KPI, itinerary dengan **perkiraan jam tiba** dan nomor rit, peringatan bila melewati jam shift, dan peta interaktif.
-- **Portal Driver:** pilih truk, target TPS berikutnya, penanda selesai, meter muatan, **peringatan prediktif** bila TPS berikutnya diperkirakan melebihi kapasitas, tombol menuju depot, dan **re-routing** hanya untuk TPS yang belum selesai.
+- **Portal Driver:** pilih truk, target TPS berikutnya, **peta rute tercepat** (rute yang sama dengan Dashboard Admin, ruas menuju tujuan berikutnya disorot lengkap dengan jarak dan waktu tempuh, serta tombol navigasi Google Maps), penanda selesai, meter muatan, **peringatan prediktif** bila TPS berikutnya diperkirakan melebihi kapasitas, tombol menuju depot, dan **re-routing** hanya untuk TPS yang belum selesai.
 - **Ringkasan perjalanan** dengan riwayat muatan per TPS.
 - **Responsif** (HP, tablet, desktop), navigasi keyboard, label aksesibilitas, dan mendukung `prefers-reduced-motion`.
 - Kondisi simulasi tersimpan di browser (localStorage); tombol **Reset Simulasi** mengembalikan ke awal.
@@ -41,10 +41,10 @@ js/store.js           Penyimpanan kondisi simulasi (localStorage)
 js/geo.js             Jarak & rute jalan (OSRM + cadangan estimasi)
 js/tsp.js             Algoritma Nearest Neighbor + 2-Opt
 js/route-engine.js    Rute per truk, jam tiba, kapasitas prediktif, re-routing, bagi otomatis
-js/map.js             Peta Leaflet (3 sumber peta dengan cadangan otomatis) dan penanda
+js/map.js             Peta Leaflet (3 sumber peta dengan cadangan otomatis), penanda, dan pabrik tampilan peta (Admin & Driver)
 js/admin.js           Dashboard admin
 js/schedule.js        Tab Jadwal Shift
-js/driver.js          Portal driver
+js/driver.js          Portal driver (termasuk peta rute)
 js/ui.js              Notifikasi dan dialog
 vendor/leaflet/       Pustaka peta Leaflet 1.9.4 (disertakan lokal)
 ```

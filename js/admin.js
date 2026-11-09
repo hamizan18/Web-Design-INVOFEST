@@ -302,6 +302,7 @@
     if (tab === 'admin') {
       refreshAll();
       SW.map.refresh();
+      redrawRoute(); // rute dan penanda mengikuti kemajuan yang dicatat driver
     } else if (tab === 'schedule') {
       document.dispatchEvent(new CustomEvent('sw:schedule-opened'));
     } else {

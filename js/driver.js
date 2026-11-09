@@ -4,13 +4,14 @@
  * - Memantau muatan, menandai TPS selesai, melihat perkiraan jam tiba
  * - Peringatan prediktif kelebihan kapasitas
  * - Menuju depot dan re-routing dinamis
+ * - Peta rute: seluruh rute sisa (sama dengan Dashboard Admin) dan ruas tercepat menuju tujuan berikutnya
  */
 (function () {
   const { esc } = SW.ui;
   const T = SW.time;
   const $ = (id) => document.getElementById(id);
 
-  const driverState = { vehicleId: null, refocus: false };
+  const driverState = { vehicleId: null, refocus: false, mapFocus: 'leg' };
 
   /** Pilih truk yang valid: truk terpilih -> truk di dashboard admin -> truk yang punya rute -> truk aktif pertama */
   function resolveVehicle() {
@@ -196,6 +197,8 @@
 
         ${actionCard}
 
+        <div id="driverMapSlot"></div>
+
         <section class="card">
           <div class="row-between">
             <h3 class="card-title">Daftar titik penugasan</h3>
@@ -223,6 +226,143 @@
       const s = $('driverVehicle');
       if (s) s.focus();
     }
+    mountMap();
+  }
+
+  /* ---------- Peta rute driver ----------
+   * Kartu peta dibuat sekali dan dipindahkan ke slot setiap kali portal digambar ulang,
+   * sehingga peta (zoom, tile) tidak dibuat ulang pada tiap aksi. */
+  const mapView = SW.map.create({ noticeId: 'driverMapNotice' });
+  let mapCard = null;
+  let mapToken = 0;
+
+  function ensureMapCard() {
+    if (mapCard) return mapCard;
+    mapCard = document.createElement('section');
+    mapCard.className = 'card driver-map-card';
+    mapCard.setAttribute('aria-labelledby', 'driverMapTitle');
+    mapCard.innerHTML = `
+      <div class="map-head">
+        <h3 id="driverMapTitle" class="card-title">🗺️ Peta rute tercepat</h3>
+        <div class="chip-group" role="group" aria-label="Cakupan peta">
+          <button type="button" class="chip" data-map-focus="leg" aria-pressed="true">Menuju tujuan</button>
+          <button type="button" class="chip" data-map-focus="all" aria-pressed="false">Seluruh rute</button>
+        </div>
+      </div>
+      <div id="driverLegInfo" class="leg-info" aria-live="polite"></div>
+      <div class="map-wrap">
+        <div id="driverMap" class="route-map" role="application" aria-label="Peta rute untuk driver"></div>
+        <div id="driverMapNotice" class="map-notice" role="status" hidden></div>
+      </div>
+      <ul class="legend legend-sm" aria-label="Keterangan peta">
+        <li><span class="line-sample line-leg" aria-hidden="true"></span> Rute tercepat ke tujuan</li>
+        <li><span class="line-sample line-rest" aria-hidden="true"></span> Sisa rute</li>
+        <li><span class="dot dot-blue"></span> Depot / TPA</li>
+        <li><span class="dot dot-cyan"></span> Stop (#urutan)</li>
+      </ul>
+      <a id="driverNavLink" class="btn btn-blue btn-block" target="_blank" rel="noopener noreferrer" hidden>🧭 Buka navigasi suara di Google Maps</a>`;
+    mapCard.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-map-focus]');
+      if (!b) return;
+      driverState.mapFocus = b.dataset.mapFocus;
+      syncFocusButtons();
+      mapView.fit(driverState.mapFocus);
+    });
+    return mapCard;
+  }
+
+  function syncFocusButtons() {
+    mapCard.querySelectorAll('[data-map-focus]').forEach((b) => {
+      const on = b.dataset.mapFocus === driverState.mapFocus;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+  }
+
+  const km = (m) => (m / 1000).toFixed(1);
+  const minutes = (s) => Math.max(1, Math.round(s / 60));
+
+  function legInfoHtml(leg, full) {
+    if (!leg) return '<p class="muted small">Armada sudah berada di tujuan, tidak ada ruas yang perlu ditempuh.</p>';
+    const target = leg.kind === 'depot'
+      ? `<b>${esc(leg.to.name)}</b> <span class="muted">(bongkar muatan)</span>`
+      : `<b>${esc(leg.to.name)}</b> <span class="badge badge-cyan">STOP #${leg.sequence}</span>`;
+    const rest = full && full.totalDistance
+      ? `<span class="muted tiny">Sisa seluruh rute ± ${km(full.totalDistance)} km</span>` : '';
+    const warn = leg.isEstimate
+      ? '<p class="note note-warn">Garis lurus (estimasi): layanan rute jalan sedang tidak terjangkau. Jalur sebenarnya dapat berbeda.</p>' : '';
+    return `
+      <div class="leg-main">
+        <div class="leg-target">Menuju ${target}</div>
+        <div class="leg-stats">
+          <span class="leg-stat"><b>${km(leg.distance)} km</b><span class="muted tiny">jarak</span></span>
+          <span class="leg-stat"><b>± ${minutes(leg.duration)} mnt</b><span class="muted tiny">waktu tempuh</span></span>
+        </div>
+      </div>
+      <div class="muted tiny">Berangkat dari ${esc(leg.from.name)}</div>${rest}${warn}`;
+  }
+
+  /** Letakkan kartu peta di slot, lalu gambar penanda, rute sisa, dan ruas menuju tujuan berikutnya. */
+  async function mountMap() {
+    const slot = $('driverMapSlot');
+    const vid = driverState.vehicleId;
+    if (!slot || !vid) return;
+    const d = SW.engine.getRouteDetails(vid);
+    if (!d) return;
+
+    const card = ensureMapCard();
+    slot.appendChild(card);
+    syncFocusButtons();
+    if (!mapView.ready) mapView.init('driverMap');
+    mapView.invalidate();
+
+    const token = ++mapToken;
+    const pending = d.points.filter((p) => p.status === 'pending');
+    const heading = d.route.status === 'rerouted';
+
+    // TPS milik truk lain ditandai ungu, sama seperti di Dashboard Admin
+    const assigned = SW.store.getAssignments();
+    const others = {};
+    Object.keys(assigned).forEach((tid) => {
+      if (assigned[tid] === vid) return;
+      const ov = SW.store.getVehicleById(assigned[tid]);
+      if (ov) others[tid] = { short: ov.short || ov.vehicle_code.slice(-1), color: ov.color, code: ov.vehicle_code };
+    });
+    mapView.renderMarkers(d.depot, SW.store.getTps(), d.points, others, {
+      fit: false, highlightId: !heading && pending[0] ? pending[0].collection_point_id : null
+    });
+
+    const info = $('driverLegInfo');
+    const nav = $('driverNavLink');
+    info.innerHTML = '<p class="muted small"><span class="spin" aria-hidden="true">⚙️</span> Memuat rute tercepat…</p>';
+    nav.hidden = true;
+
+    let full = null;
+    let leg = null;
+    try {
+      [full, leg] = await Promise.all([
+        SW.engine.getActiveRoute(vid).catch(() => null),
+        SW.engine.getNextLeg(vid).catch(() => null)
+      ]);
+    } catch (e) { /* peta tetap tampil tanpa garis */ }
+    if (token !== mapToken) return; // portal sudah digambar ulang oleh aksi yang lebih baru
+
+    mapView.clearRoute();
+    mapView.clearLeg();
+    if (full) mapView.drawRoute(full.geometry, d.vehicle.color, { fit: false, subtle: true });
+    if (leg) {
+      mapView.drawLeg(leg.geometry, d.vehicle.color);
+      mapView.setOrigin(leg.from, {
+        color: d.vehicle.color,
+        label: leg.from.isDepot ? 'Armada berangkat dari depot' : 'TPS terakhir yang dilayani'
+      });
+      nav.href = `https://www.google.com/maps/dir/?api=1&destination=${leg.to.latitude},${leg.to.longitude}&travelmode=driving`;
+      nav.hidden = false;
+    } else {
+      mapView.setOrigin(null);
+    }
+    info.innerHTML = legInfoHtml(leg, full);
+    mapView.fit(driverState.mapFocus);
   }
 
   /* ---------- Aksi ---------- */
@@ -274,7 +414,6 @@
         btn.disabled = true;
         btn.textContent = 'Menghitung ulang rute…';
         const r = await SW.engine.reroute(vid);
-        if (r.geometry) SW.map.drawRoute(r.geometry, SW.store.getVehicleById(vid).color);
         SW.ui.toast(r.message + (r.overShift ? ' Perhatian: perkiraan selesai melewati akhir shift.' : ''), r.overShift ? 'warn' : 'success');
         afterChange();
       } else if (action === 'quick') {

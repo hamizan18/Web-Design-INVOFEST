@@ -19,6 +19,28 @@
   const depotPoint = (d) => ({ id: d.id, name: d.name, latitude: d.latitude, longitude: d.longitude, isDepot: true });
 
   /**
+   * Cache geometri jalan. Dashboard Admin dan Portal Driver membaca rute dari sini,
+   * sehingga garis yang tampil di kedua peta selalu sama dan OSRM tidak dipanggil berulang.
+   * Hasil OSRM disimpan selama sesi; hasil estimasi (OSRM tidak terjangkau) hanya 60 detik
+   * agar rute jalan nyata dicoba lagi begitu koneksi pulih.
+   */
+  const geoCache = new Map();
+  const CACHE_MAX = 80;
+  const ESTIMATE_TTL_MS = 60000;
+  function cacheGet(key) {
+    const e = geoCache.get(key);
+    if (!e) return null;
+    if (e.value.isEstimate && Date.now() - e.at > ESTIMATE_TTL_MS) { geoCache.delete(key); return null; }
+    return e.value;
+  }
+  function cacheSet(key, value) {
+    if (geoCache.size >= CACHE_MAX) geoCache.delete(geoCache.keys().next().value);
+    geoCache.set(key, { value, at: Date.now() });
+  }
+  const routeKey = (routeId, depotId, ids) => `r|${routeId}|${depotId}|${ids.join(',')}`;
+  const legKey = (a, b) => `l|${a.latitude},${a.longitude}|${b.latitude},${b.longitude}`;
+
+  /**
    * Menyusun jam tiba tiap TPS.
    * tour      : urutan indeks titik, mis. [0, 3, 1, 2, 0] (0 = depot)
    * durations : matriks waktu tempuh (detik)
@@ -153,6 +175,8 @@
         status: 'active'
       }, planned);
 
+      cacheSet(routeKey(route.id, depot.id, planned.map((p) => p.collection_point_id)), geometry);
+
       store.updateVehicle(vehicle.id, { status: 'in_route', current_capacity: 0 });
       selected.forEach((t) => store.updateTps(t.id, { status: 'planned' }));
 
@@ -198,15 +222,74 @@
       };
     },
 
-    /** Geometri jalan untuk rute berjalan (hanya titik yang belum selesai) */
-    async getActiveGeometry(vehicleId) {
+    /**
+     * Rute jalan seluruh sisa kunjungan (depot -> TPS yang belum selesai -> depot).
+     * Mengembalikan { geometry, totalDistance, totalDuration, isEstimate } atau null bila tidak ada sisa TPS.
+     */
+    async getActiveRoute(vehicleId) {
       const d = this.getRouteDetails(vehicleId);
       if (!d) return null;
       const pending = d.points.filter((p) => p.status === 'pending');
       if (!pending.length) return null;
-      const coords = [d.depot, ...pending, d.depot].map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
-      const g = await SW.geo.getRouteGeometry(coords);
-      return g.geometry;
+      const key = routeKey(d.route.id, d.depot.id, pending.map((p) => p.collection_point_id));
+      let g = cacheGet(key);
+      if (!g) {
+        const coords = [d.depot, ...pending, d.depot].map((p) => ({ latitude: p.latitude, longitude: p.longitude }));
+        g = await SW.geo.getRouteGeometry(coords);
+        cacheSet(key, g);
+      }
+      return g;
+    },
+
+    /** Geometri jalan untuk rute berjalan (hanya titik yang belum selesai) */
+    async getActiveGeometry(vehicleId) {
+      const g = await this.getActiveRoute(vehicleId);
+      return g ? g.geometry : null;
+    },
+
+    /**
+     * Titik berangkat armada untuk ruas berikutnya: TPS terakhir yang dilayani sejak
+     * armada terakhir meninggalkan depot, atau depot bila belum ada.
+     */
+    currentOrigin(d) {
+      const since = d.route.last_depot_at || '';
+      const done = d.points
+        .filter((p) => p.status === 'completed' && p.actual_arrival && p.actual_arrival > since)
+        .sort((a, b) => (a.actual_arrival < b.actual_arrival ? 1 : -1));
+      if (done.length) {
+        const p = done[0];
+        return { id: p.collection_point_id, name: p.name, latitude: p.latitude, longitude: p.longitude, isDepot: false };
+      }
+      return depotPoint(d.depot);
+    },
+
+    /**
+     * Ruas rute tercepat dari titik berangkat menuju tujuan berikutnya (TPS berikutnya,
+     * atau depot bila armada sedang menuju depot / seluruh TPS sudah selesai).
+     * Mengembalikan { from, to, kind: 'tps' | 'depot', sequence, distance, duration, geometry, isEstimate } atau null.
+     */
+    async getNextLeg(vehicleId) {
+      const d = this.getRouteDetails(vehicleId);
+      if (!d) return null;
+      const pending = d.points.filter((p) => p.status === 'pending');
+      const toDepot = d.route.status === 'rerouted' || pending.length === 0;
+      const from = this.currentOrigin(d);
+      const next = pending[0];
+      const to = toDepot
+        ? depotPoint(d.depot)
+        : { id: next.collection_point_id, name: next.name, latitude: next.latitude, longitude: next.longitude, isDepot: false };
+      if (from.latitude === to.latitude && from.longitude === to.longitude) return null;
+
+      const key = legKey(from, to);
+      let g = cacheGet(key);
+      if (!g) {
+        g = await SW.geo.getRouteGeometry([from, to]);
+        cacheSet(key, g);
+      }
+      return {
+        from, to, kind: toDepot ? 'depot' : 'tps', sequence: toDepot ? null : next.sequence,
+        distance: g.totalDistance, duration: g.totalDuration, geometry: g.geometry, isEstimate: Boolean(g.isEstimate)
+      };
     },
 
     /** Driver menandai TPS selesai + cek kapasitas prediktif */
@@ -329,8 +412,11 @@
         if (rp) store.updateRoutePoint(vehicleId, rp.id, { sequence: i + 1, eta_min: st.eta, trip: st.trip });
       });
 
+      cacheSet(routeKey(route.id, depot.id, tsp.tour.slice(1, -1).map((i) => pts[i].id)), geometry);
+
       store.updateRoute(vehicleId, {
         status: 'active',
+        last_depot_at: new Date().toISOString(),
         total_distance: geometry.totalDistance, total_duration: geometry.totalDuration,
         tsp_gain: `${tsp.improvementPercentage}%`,
         start_min: startMin, finish_min: tl.finishMin, shift_end_min: shiftEnd,
