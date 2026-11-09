@@ -11,8 +11,6 @@ Cukup **buka `index.html` di browser** (klik dua kali). Tidak ada instalasi, ser
 
 > Butuh internet untuk menampilkan tile peta dan menghitung jarak jalan nyata (OSRM). Tanpa internet, aplikasi tetap berjalan memakai estimasi jarak garis lurus × 1,3.
 
-Untuk dipublikasikan, unggah seluruh isi folder ke GitHub Pages / Netlify / hosting statis apa pun. Jika peta dasar kosong saat dibuka langsung dari berkas, jalankan lewat server lokal atau hosting (lihat `PANDUAN.md`, bagian C).
-
 **Panduan lengkap alur penggunaan dan cara mengubah isi aplikasi: [`PANDUAN.md`](PANDUAN.md).**
 
 ## Fitur
