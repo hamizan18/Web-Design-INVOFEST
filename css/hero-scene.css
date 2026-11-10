@@ -1,0 +1,110 @@
+/* ==========================================================================
+   Hero Scene — latar animasi isometrik (truk sampah, jalan, tablet, properti)
+   Terinspirasi video referensi "mobilsampah". Dirender sebagai SVG murni,
+   digerakkan oleh js/hero-scene.js. Tanpa video / gambar tambahan.
+   ========================================================================== */
+
+.hero-scene {
+  position: absolute; inset: 0; z-index: -1;
+  pointer-events: none; overflow: hidden; border-radius: inherit;
+}
+.hero-scene svg {
+  position: absolute; right: 0; top: 50%;
+  width: max(100%, 1040px); height: auto;
+  transform: translateY(-50%);
+  overflow: visible; display: block;
+}
+
+/* Scrim: menjaga teks hero tetap terbaca di atas adegan */
+.hero-scene::after {
+  content: ""; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 34% 40% at 71% 30%, rgba(10, 43, 32, .74) 0%, rgba(10, 43, 32, .5) 55%, rgba(10, 43, 32, 0) 100%),
+    radial-gradient(ellipse 48% 80% at 22% 50%, rgba(10, 43, 32, .62) 0%, rgba(10, 43, 32, 0) 80%),
+    linear-gradient(rgba(10, 43, 32, .16), rgba(10, 43, 32, .16));
+}
+@media (max-width: 899px) {
+  .hero-scene::after { background: linear-gradient(180deg, rgba(10, 43, 32, .82), rgba(10, 43, 32, .7)); }
+}
+
+/* ---------- Elemen dasar ---------- */
+.hs-road     { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.hs-road-glow{ stroke: #f2b33d; stroke-width: 46; opacity: .13; }
+.hs-road-sh  { stroke: #04170f; stroke-width: 9; opacity: .4; }
+.hs-road-main{ stroke: #f2b33d; stroke-width: 7; }
+.hs-road-hi  { stroke: #ffd77a; stroke-width: 2; opacity: .75; }
+.hs-shadow   { fill: #03150e; opacity: .38; }
+.hs-layer    { will-change: transform; }
+
+/* Jalan tergambar bertahap */
+.hs-anim .hs-draw { stroke-dasharray: 100; stroke-dashoffset: 100; }
+.hs-run .hs-draw { stroke-dashoffset: 0; transition: stroke-dashoffset 2s cubic-bezier(.3, .7, .2, 1) var(--rd, 0s); }
+
+/* ---------- Animasi masuk (hanya jika JS aktif & gerak diizinkan) ---------- */
+.hs-pop, .hs-fade, .hs-drop { transform-box: fill-box; }
+.hs-pop  { transform-origin: 50% 100%; }
+.hs-drop { transform-origin: 50% 50%; }
+.hs-fade { transform-origin: 50% 50%; }
+
+.hs-anim .hs-pop, .hs-anim .hs-fade, .hs-anim .hs-drop,
+.hs-anim .hs-tshadow { opacity: 0; }
+
+.hs-run .hs-pop  { animation: hsPop .8s cubic-bezier(.34, 1.56, .64, 1) both; animation-delay: var(--d, 0s); }
+.hs-run .hs-fade { animation: hsFade .9s ease-out both; animation-delay: var(--d, 0s); }
+.hs-run .hs-drop { animation: hsDrop 1.5s cubic-bezier(.22, .9, .3, 1) both; animation-delay: var(--d, 0s); }
+.hs-run .hs-tshadow { animation: hsShadow 1.5s ease-out both; animation-delay: var(--d, 0s); }
+
+@keyframes hsPop {
+  0%   { opacity: 0; transform: translateY(-34px) scale(.2); }
+  55%  { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes hsFade { from { opacity: 0; } to { opacity: 1; } }
+/* Tablet jatuh dari atas, miring, lalu mendarat dengan sedikit pantulan */
+@keyframes hsDrop {
+  0%   { opacity: 0; transform: translate(-30px, -300px) scale(1.55) rotate(-9deg); filter: blur(6px); }
+  35%  { opacity: 1; filter: blur(3px); }
+  70%  { transform: translate(0, 12px) scale(.985) rotate(.6deg); filter: blur(0); }
+  86%  { transform: translate(0, -5px) scale(1.004) rotate(-.2deg); }
+  100% { opacity: 1; transform: none; filter: none; }
+}
+@keyframes hsShadow {
+  0%   { opacity: 0; transform: scale(1.6) translate(-20px, -40px); }
+  60%  { opacity: .2; }
+  100% { opacity: .55; transform: none; }
+}
+
+/* Gerak halus saat diam */
+.hs-bob { animation: hsBob 5s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 100%; }
+@keyframes hsBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.5px); } }
+.hs-ping { animation: hsPing 2.6s ease-in-out infinite; animation-delay: var(--d, 0s); transform-box: fill-box; transform-origin: center; }
+@keyframes hsPing { 0%, 100% { opacity: .95; transform: scale(1); } 50% { opacity: .55; transform: scale(1.35); } }
+
+/* ---------- Layar tablet: peta <-> daftar rute ---------- */
+.hs-screen-map, .hs-screen-list { transition: opacity .7s ease; }
+.hs-screen-list { opacity: 0; }
+.hs-tablet.is-list .hs-screen-list { opacity: 1; }
+.hs-tablet.is-list .hs-screen-map  { opacity: .0; }
+
+.hs-route { stroke-dasharray: 100; stroke-dashoffset: 100; transition: stroke-dashoffset 2.4s cubic-bezier(.4, 0, .2, 1) .5s; }
+.hs-tablet:not(.is-list) .hs-route { stroke-dashoffset: 0; }
+.hs-tablet.is-list .hs-route { transition: none; }
+
+.hs-bubble { transform-box: fill-box; transform-origin: 50% 100%; transform: scale(0); opacity: 0;
+  transition: transform .5s cubic-bezier(.34, 1.56, .64, 1) 2.2s, opacity .3s ease 2.2s; }
+.hs-tablet:not(.is-list) .hs-bubble { transform: none; opacity: 1; }
+.hs-tablet.is-list .hs-bubble { transition: none; }
+
+.hs-row { opacity: 0; transform: translateY(8px); transition: opacity .45s ease, transform .45s ease; transition-delay: 0s; }
+.hs-tablet.is-list .hs-row { opacity: 1; transform: none; transition-delay: calc(.35s + var(--i) * .09s); }
+
+.hs-menu { transform-box: fill-box; transform-origin: 0 0; transform: scale(.4); opacity: 0; transition: transform .35s cubic-bezier(.34, 1.56, .64, 1), opacity .2s ease; }
+.hs-tablet.is-list.show-menu .hs-menu { transform: none; opacity: 1; }
+.hs-tablet.is-list.show-menu .hs-row-dim { opacity: .35; }
+.hs-row-dim { transition: opacity .3s ease; }
+
+/* Gerak dikurangi: tampilkan keadaan akhir statis (peta + rute + gelembung) */
+@media (prefers-reduced-motion: reduce) {
+  .hs-route { stroke-dashoffset: 0 !important; }
+  .hs-bubble { transform: none !important; opacity: 1 !important; }
+}

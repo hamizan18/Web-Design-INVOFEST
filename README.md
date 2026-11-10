@@ -35,6 +35,8 @@ Cukup **buka `index.html` di browser** (klik dua kali). Tidak ada instalasi, ser
 ```
 index.html            Halaman utama
 css/style.css         Seluruh gaya antarmuka (CSS murni)
+css/hero-scene.css    Gaya latar animasi hero (jalan, truk, tablet, properti)
+js/hero-scene.js      Pembangun & penggerak adegan animasi hero (SVG, tanpa video)
 js/data.js            Data depot, truk & shift, pengaturan, dan 15 TPS Lhokseumawe
 js/time.js            Fungsi jam dan status shift
 js/store.js           Penyimpanan kondisi simulasi (localStorage)
@@ -48,6 +50,10 @@ js/driver.js          Portal driver (termasuk peta rute)
 js/ui.js              Notifikasi dan dialog
 vendor/leaflet/       Pustaka peta Leaflet 1.9.4 (disertakan lokal)
 ```
+
+## Latar animasi hero
+
+Bagian hero memakai adegan isometrik animasi (SVG murni, tanpa video): jalan yang tergambar, truk sampah yang berkendara di jalan, tablet yang jatuh lalu bergantian menampilkan peta dan daftar rute, serta properti yang muncul satu per satu. Efek paralaks mengikuti mouse. Animasi berhenti saat hero tidak terlihat/tab tidak aktif, dan tampil statis jika `prefers-reduced-motion` aktif. Untuk mematikannya, hapus elemen `#heroScene` di `index.html`.
 
 ## Mengubah data
 
